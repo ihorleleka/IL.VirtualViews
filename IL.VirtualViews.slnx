@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="./Code/IL.VirtualViews.Generation/IL.VirtualViews.Generation.csproj" />
+  <Project Path="./Code/IL.VirtualViews/IL.VirtualViews.csproj" />
+  <Project Path="./Tests/IL.VirtualViews.Tests.csproj" />
+</Solution>
