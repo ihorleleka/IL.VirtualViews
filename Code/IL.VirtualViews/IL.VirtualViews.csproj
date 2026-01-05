@@ -3,7 +3,7 @@
         <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <PackageVersion>1.9.0.1</PackageVersion>
+        <PackageVersion>1.9.0.2</PackageVersion>
         <RootNamespace>IL.VirtualViews</RootNamespace>
         <Title>Virtual Views</Title>
         <Authors>Ihor Leleka</Authors>
@@ -18,7 +18,7 @@
     </PropertyGroup>
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <PackageReference Include="IL.Misc" Version="1.4.0" />
+        <PackageReference Include="IL.Misc" Version="1.5.0.1" />
         <None Include="LICENSE.txt" Pack="true" Visible="false" PackagePath="" />
         <None Include="Readme.md" Pack="true" Visible="false" PackagePath="" />
         <None Include="$(OutputPath)\net8.0\$(AssemblyName).Generation.dll"
