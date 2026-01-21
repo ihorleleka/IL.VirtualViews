@@ -26,8 +26,8 @@ public static class ServiceCollectionExtensions
             .GetAssemblies(assembliesFilter)
             .Where(assembly => !assembly.IsDynamic)
             .SelectMany(TypesAndAssembliesHelper.GetExportedTypes)
-            .Where(type => type is { IsAbstract: false, IsGenericTypeDefinition: false } && type.CustomAttributes.Any())
-            .Where(HasVirtualViewsAttributeOrOneOfDerivatives)
+            .Where(type => type is { IsAbstract: false, IsGenericTypeDefinition: false })
+            .Where(HasVirtualViewsAttributeSafely)
             .Where(HasIVirtualViewInterface)
             .ToList();
 
@@ -37,11 +37,18 @@ public static class ServiceCollectionExtensions
     }
 
 
-    private static bool HasVirtualViewsAttributeOrOneOfDerivatives(Type type)
+    private static bool HasVirtualViewsAttributeSafely(Type type)
     {
-        return type
-            .GetCustomAttributes()
-            .Any(x => x is VirtualViewPathAttribute);
+        try
+        {
+            return type
+                .CustomAttributes
+                .Any(x => typeof(VirtualViewPathAttribute).IsAssignableFrom(x.AttributeType));
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool HasIVirtualViewInterface(Type type)
