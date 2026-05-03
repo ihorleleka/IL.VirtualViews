@@ -37,7 +37,9 @@
 
   <ItemGroup>
     <None Remove="VirtualViewsFolder\Test.virtual.cshtml" />
+    <None Remove="RazorRendering\DebugVirtualView.virtual.cshtml" />
     <AdditionalFiles Include="VirtualViewsFolder\Test.virtual.cshtml" />
+    <AdditionalFiles Include="RazorRendering\DebugVirtualView.virtual.cshtml" />
   </ItemGroup>
 
 </Project>

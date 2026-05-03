@@ -57,3 +57,33 @@ public partial class Test : IVirtualView
 ```
 
 Then you only need to create non-auto-generated partial part and decorate it with `VirtualViewPath` attribute with desired path original view was supposed to be handled for.
+
+# Registration behavior
+
+When source generation is enabled, the package now also generates `IL.VirtualViews.Generated.VirtualViewRegistry` in your project.
+`AddVirtualViewsCapabilities(...)` uses this generated registry first, so virtual view discovery is compile-time driven instead of assembly-wide runtime scanning.
+
+If no generated registry is present for an assembly, the previous reflection-based fallback is still used.
+
+# Debugging virtual views
+
+By default, in `Development` environment (`DOTNET_ENVIRONMENT` or `ASPNETCORE_ENVIRONMENT`), virtual view content is mirrored to temporary physical files and exposed through `IFileInfo.PhysicalPath`.
+This improves Razor diagnostics and makes virtual views easier to debug.
+
+You can explicitly enable this behavior in any environment (for example `Local`):
+
+```csharp
+services.AddVirtualViewsCapabilities(
+    options => options.EnableDebugPhysicalFiles = true,
+    "*"
+);
+```
+
+or
+
+```csharp
+builder.AddVirtualViewsCapabilities(
+    options => options.EnableDebugPhysicalFiles = true,
+    "*"
+);
+```

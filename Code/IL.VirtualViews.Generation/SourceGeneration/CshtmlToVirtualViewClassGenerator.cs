@@ -15,7 +15,7 @@ public sealed class CshtmlToVirtualViewClassGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var compilationProvider = context.CompilationProvider.Select((compilation, _) => compilation.AssemblyName);
+        var compilationProvider = context.CompilationProvider;
 
         // Get the .virtual.cshtml files
         var cshtmlFiles = context
@@ -30,10 +30,11 @@ public sealed class CshtmlToVirtualViewClassGenerator : IIncrementalGenerator
             })
             .Collect();
 
-        // Combine the cshtmlFiles with the compilationProvider to pass both pieces of information to the next step
-        var combined = cshtmlFiles.Combine(compilationProvider);
+        // Combine the cshtmlFiles with the assembly name to pass both pieces of information to the next step
+        var combined = cshtmlFiles.Combine(compilationProvider.Select((compilation, _) => compilation.AssemblyName));
 
         context.RegisterSourceOutput(combined, Generate!);
+        context.RegisterSourceOutput(compilationProvider, GenerateRegistry!);
     }
 
     private static void Generate(SourceProductionContext spc, (ImmutableArray<GenerationClass> generationClasses, string assemblyName) combined)
@@ -59,7 +60,10 @@ public sealed class CshtmlToVirtualViewClassGenerator : IIncrementalGenerator
     private static CompilationUnitSyntax BuildClassDeclarationSyntaxWithinGivenNamespace(GenerationClass generationClass, string namespaceToUse)
     {
         var compilationUnit = CompilationUnit()
-            .AddUsings(CreateUsing("IL.VirtualViews.Interfaces"))
+            .AddUsings(
+                CreateUsing("IL.VirtualViews.Interfaces"),
+                CreateUsing("IL.VirtualViews.Attributes")
+            )
             .AddMembers(
                 FileScopedNamespaceDeclaration(IdentifierName(namespaceToUse))
                     .AddMembers(CreateClassSyntaxDeclaration(generationClass))
@@ -74,6 +78,23 @@ public sealed class CshtmlToVirtualViewClassGenerator : IIncrementalGenerator
         return ClassDeclaration(Identifier(generationClass.Name))
             .AddModifiers(Token(SyntaxKind.PublicKeyword))
             .AddModifiers(Token(SyntaxKind.PartialKeyword))
+            .AddAttributeLists(
+                AttributeList(SingletonSeparatedList(
+                    Attribute(IdentifierName("VirtualViewSourcePath"))
+                        .WithArgumentList(
+                            AttributeArgumentList(
+                                SingletonSeparatedList(
+                                    AttributeArgument(
+                                        LiteralExpression(
+                                            SyntaxKind.StringLiteralExpression,
+                                            Literal(generationClass.Path)
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                ))
+            )
             .AddBaseListTypes(SimpleBaseType(IdentifierName("IVirtualView")))
             .AddMembers(
                 PropertyDeclaration(
@@ -116,5 +137,114 @@ public sealed class CshtmlToVirtualViewClassGenerator : IIncrementalGenerator
         NameSyntax name = IdentifierName(parts[0]);
         name = parts.Skip(1).Aggregate(name, (current, part) => QualifiedName(current, IdentifierName(part)));
         return UsingDirective(name);
+    }
+
+    private static void GenerateRegistry(SourceProductionContext spc, Compilation compilation)
+    {
+        var iVirtualView = compilation.GetTypeByMetadataName("IL.VirtualViews.Interfaces.IVirtualView");
+        var virtualViewPathAttribute = compilation.GetTypeByMetadataName("IL.VirtualViews.Attributes.VirtualViewPathAttribute");
+
+        if (iVirtualView == null || virtualViewPathAttribute == null)
+        {
+            return;
+        }
+
+        var allTypes = GetAllTypes(compilation.Assembly.GlobalNamespace);
+        var matchingTypes = new System.Collections.Generic.List<INamedTypeSymbol>();
+
+        foreach (var type in allTypes)
+        {
+            if (type.IsAbstract || type.IsGenericType)
+            {
+                continue;
+            }
+
+            if (!type.AllInterfaces.Contains(iVirtualView, SymbolEqualityComparer.Default))
+            {
+                continue;
+            }
+
+            if (!HasVirtualViewPathAttribute(type, virtualViewPathAttribute))
+            {
+                continue;
+            }
+
+            matchingTypes.Add(type);
+        }
+
+        var source = $$"""
+                       namespace IL.VirtualViews.Generated;
+
+                       internal static class VirtualViewRegistry
+                       {
+                           internal static global::System.Type[] GetVirtualViewTypes()
+                           {
+                               return new global::System.Type[]
+                               {
+                       {{string.Join("\n", matchingTypes.Select(x => $"                    typeof({x.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}),"))}}
+                               };
+                           }
+                       }
+                       """;
+
+        spc.AddSource("VirtualViewRegistry.g.cs", source);
+    }
+
+    private static bool HasVirtualViewPathAttribute(INamedTypeSymbol type, INamedTypeSymbol virtualViewPathAttribute)
+    {
+        var attribute = type.GetAttributes()
+            .FirstOrDefault(x => x.AttributeClass != null && InheritsFromOrEquals(x.AttributeClass, virtualViewPathAttribute));
+
+        return attribute != null;
+    }
+
+    private static bool InheritsFromOrEquals(INamedTypeSymbol type, INamedTypeSymbol candidateBase)
+    {
+        var current = type;
+        while (current != null)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, candidateBase))
+            {
+                return true;
+            }
+
+            current = current.BaseType;
+        }
+
+        return false;
+    }
+
+    private static System.Collections.Generic.IEnumerable<INamedTypeSymbol> GetAllTypes(INamespaceSymbol root)
+    {
+        foreach (var member in root.GetMembers())
+        {
+            if (member is INamespaceSymbol @namespace)
+            {
+                foreach (var child in GetAllTypes(@namespace))
+                {
+                    yield return child;
+                }
+            }
+            else if (member is INamedTypeSymbol namedType)
+            {
+                foreach (var child in GetAllTypes(namedType))
+                {
+                    yield return child;
+                }
+            }
+        }
+    }
+
+    private static System.Collections.Generic.IEnumerable<INamedTypeSymbol> GetAllTypes(INamedTypeSymbol root)
+    {
+        yield return root;
+
+        foreach (var nested in root.GetTypeMembers())
+        {
+            foreach (var child in GetAllTypes(nested))
+            {
+                yield return child;
+            }
+        }
     }
 }

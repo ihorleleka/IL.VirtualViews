@@ -17,25 +17,74 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddVirtualViewsCapabilities(this IServiceCollection serviceCollection, params string[] assembliesFilter)
     {
+        return serviceCollection.AddVirtualViewsCapabilities(_ => { }, assembliesFilter);
+    }
+
+    public static IServiceCollection AddVirtualViewsCapabilities(
+        this IServiceCollection serviceCollection,
+        Action<VirtualViewsRegistrationOptions> configureOptions,
+        params string[] assembliesFilter)
+    {
         serviceCollection
             .AddControllersWithViews()
             .AddRazorRuntimeCompilation();
 
-
-        var supportedTypes = TypesAndAssembliesHelper
+        var options = new VirtualViewsRegistrationOptions();
+        configureOptions(options);
+        var debugPhysicalFilesEnabled = options.EnableDebugPhysicalFiles ?? IsDevelopmentEnvironment();
+        var allAssemblies = TypesAndAssembliesHelper
             .GetAssemblies(assembliesFilter)
             .Where(assembly => !assembly.IsDynamic)
-            .SelectMany(TypesAndAssembliesHelper.GetExportedTypes)
-            .Where(type => type is { IsAbstract: false, IsGenericTypeDefinition: false })
-            .Where(HasVirtualViewsAttributeSafely)
-            .Where(HasIVirtualViewInterface)
             .ToList();
 
-        serviceCollection.Configure<MvcRazorRuntimeCompilationOptions>(options => { options.FileProviders.Add(new VirtualViewsProvider(supportedTypes)); });
+        var supportedTypes = allAssemblies
+            .SelectMany(GetSupportedTypesForAssembly)
+            .Distinct()
+            .ToList();
+
+        serviceCollection.Configure<MvcRazorRuntimeCompilationOptions>(options =>
+        {
+            options.FileProviders.Add(new VirtualViewsProvider(supportedTypes, debugPhysicalFilesEnabled));
+        });
 
         return serviceCollection;
     }
 
+    private static IEnumerable<Type> GetSupportedTypesForAssembly(Assembly assembly)
+    {
+        var reflectionTypes = TypesAndAssembliesHelper
+            .GetExportedTypes(assembly)
+            .Where(type => type is { IsAbstract: false, IsGenericTypeDefinition: false })
+            .Where(HasVirtualViewsAttributeSafely)
+            .Where(HasIVirtualViewInterface);
+
+        if (!TryGetGeneratedSupportedTypes(assembly, out var generatedTypes))
+        {
+            return reflectionTypes;
+        }
+
+        return generatedTypes!.Concat(reflectionTypes).Distinct();
+    }
+
+    private static bool TryGetGeneratedSupportedTypes(Assembly assembly, out IEnumerable<Type>? generatedTypes)
+    {
+        generatedTypes = null;
+
+        var registryType = assembly.GetType("IL.VirtualViews.Generated.VirtualViewRegistry", throwOnError: false, ignoreCase: false);
+        if (registryType == null)
+        {
+            return false;
+        }
+
+        var method = registryType.GetMethod("GetVirtualViewTypes", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+        if (method == null || method.ReturnType != typeof(Type[]))
+        {
+            return false;
+        }
+
+        generatedTypes = ((Type[]?)method.Invoke(null, null))?.Where(type => type != null) ?? Array.Empty<Type>();
+        return true;
+    }
 
     private static bool HasVirtualViewsAttributeSafely(Type type)
     {
@@ -54,5 +103,13 @@ public static class ServiceCollectionExtensions
     private static bool HasIVirtualViewInterface(Type type)
     {
         return type.GetInterfaces().Any(x => x == typeof(IVirtualView));
+    }
+
+    private static bool IsDevelopmentEnvironment()
+    {
+        var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                          ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+        return string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -15,4 +15,13 @@ public static class WebAppBuilderExtensions
         builder.Services.AddVirtualViewsCapabilities(assembliesFilter);
         return builder;
     }
+
+    public static WebApplicationBuilder AddVirtualViewsCapabilities(
+        this WebApplicationBuilder builder,
+        Action<VirtualViewsRegistrationOptions> configureOptions,
+        params string[] assembliesFilter)
+    {
+        builder.Services.AddVirtualViewsCapabilities(configureOptions, assembliesFilter);
+        return builder;
+    }
 }
