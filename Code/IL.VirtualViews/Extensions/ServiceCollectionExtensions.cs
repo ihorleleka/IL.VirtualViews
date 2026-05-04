@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         serviceCollection.AddOptions<MvcRazorRuntimeCompilationOptions>().Configure<IConfiguration>((runtimeCompilationOptions, configuration) =>
         {
             var isDebugEnabled = debugPhysicalFilesEnabled ?? configuration.GetValue<bool>("VirtualViews:Debug");
+            RemoveVirtualViewsProviders(runtimeCompilationOptions);
             runtimeCompilationOptions.FileProviders.Add(new VirtualViewsProvider(supportedTypes, isDebugEnabled));
         });
 
@@ -105,5 +106,16 @@ public static class ServiceCollectionExtensions
     private static bool HasIVirtualViewInterface(Type type)
     {
         return type.GetInterfaces().Any(x => x == typeof(IVirtualView));
+    }
+
+    private static void RemoveVirtualViewsProviders(MvcRazorRuntimeCompilationOptions runtimeCompilationOptions)
+    {
+        for (var i = runtimeCompilationOptions.FileProviders.Count - 1; i >= 0; i--)
+        {
+            if (runtimeCompilationOptions.FileProviders[i] is VirtualViewsProvider)
+            {
+                runtimeCompilationOptions.FileProviders.RemoveAt(i);
+            }
+        }
     }
 }
