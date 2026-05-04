@@ -4,6 +4,7 @@ using IL.VirtualViews.Attributes;
 using IL.VirtualViews.ContentProvider;
 using IL.VirtualViews.Interfaces;
 using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IL.VirtualViews.Extensions;
@@ -31,7 +32,7 @@ public static class ServiceCollectionExtensions
 
         var options = new VirtualViewsRegistrationOptions();
         configureOptions(options);
-        var debugPhysicalFilesEnabled = options.EnableDebugPhysicalFiles ?? IsDevelopmentEnvironment();
+        var debugPhysicalFilesEnabled = options.EnableDebugPhysicalFiles;
         var allAssemblies = TypesAndAssembliesHelper
             .GetAssemblies(assembliesFilter)
             .Where(assembly => !assembly.IsDynamic)
@@ -42,9 +43,10 @@ public static class ServiceCollectionExtensions
             .Distinct()
             .ToList();
 
-        serviceCollection.Configure<MvcRazorRuntimeCompilationOptions>(options =>
+        serviceCollection.AddOptions<MvcRazorRuntimeCompilationOptions>().Configure<IConfiguration>((runtimeCompilationOptions, configuration) =>
         {
-            options.FileProviders.Add(new VirtualViewsProvider(supportedTypes, debugPhysicalFilesEnabled));
+            var isDebugEnabled = debugPhysicalFilesEnabled ?? configuration.GetValue<bool>("VirtualViews:Debug");
+            runtimeCompilationOptions.FileProviders.Add(new VirtualViewsProvider(supportedTypes, isDebugEnabled));
         });
 
         return serviceCollection;
@@ -82,7 +84,7 @@ public static class ServiceCollectionExtensions
             return false;
         }
 
-        generatedTypes = ((Type[]?)method.Invoke(null, null))?.Where(type => type != null) ?? Array.Empty<Type>();
+        generatedTypes = ((Type[]?)method.Invoke(null, null))?.Where(type => type != null) ?? [];
         return true;
     }
 
@@ -103,13 +105,5 @@ public static class ServiceCollectionExtensions
     private static bool HasIVirtualViewInterface(Type type)
     {
         return type.GetInterfaces().Any(x => x == typeof(IVirtualView));
-    }
-
-    private static bool IsDevelopmentEnvironment()
-    {
-        var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-                          ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-
-        return string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase);
     }
 }

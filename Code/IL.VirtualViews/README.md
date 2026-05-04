@@ -67,10 +67,21 @@ If no generated registry is present for an assembly, the previous reflection-bas
 
 # Debugging virtual views
 
-By default, in `Development` environment (`DOTNET_ENVIRONMENT` or `ASPNETCORE_ENVIRONMENT`), virtual view content is mirrored to temporary physical files and exposed through `IFileInfo.PhysicalPath`.
+By default, debug physical files are controlled by configuration key `VirtualViews:Debug` (`true`/`false`).
+When enabled, virtual view content is mirrored to temporary physical files and exposed through `IFileInfo.PhysicalPath`.
 This improves Razor diagnostics and makes virtual views easier to debug.
 
-You can explicitly enable this behavior in any environment (for example `Local`):
+Example configuration:
+
+```json
+{
+  "VirtualViews": {
+    "Debug": true
+  }
+}
+```
+
+You can still explicitly override this behavior in code:
 
 ```csharp
 services.AddVirtualViewsCapabilities(
