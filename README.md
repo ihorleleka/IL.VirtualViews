@@ -59,13 +59,6 @@ public partial class Test : IVirtualView
 
 Then you only need to create non-auto-generated partial part and decorate it with `VirtualViewPath` attribute with desired path original view was supposed to be handled for.
 
-# Registration behavior
-
-When source generation is enabled, the package now also generates `IL.VirtualViews.Generated.VirtualViewRegistry` in your project.
-`AddVirtualViewsCapabilities(...)` uses this generated registry first, so virtual view discovery is compile-time driven instead of assembly-wide runtime scanning.
-
-If no generated registry is present for an assembly, the previous reflection-based fallback is still used.
-
 # Debugging virtual views
 
 By default, debug physical files are controlled by configuration key `VirtualViews:Debug` (`true`/`false`).

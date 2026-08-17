@@ -61,32 +61,7 @@ public static class ServiceCollectionExtensions
             .Where(HasVirtualViewsAttributeSafely)
             .Where(HasIVirtualViewInterface);
 
-        if (!TryGetGeneratedSupportedTypes(assembly, out var generatedTypes))
-        {
-            return reflectionTypes;
-        }
-
-        return generatedTypes!.Concat(reflectionTypes).Distinct();
-    }
-
-    private static bool TryGetGeneratedSupportedTypes(Assembly assembly, out IEnumerable<Type>? generatedTypes)
-    {
-        generatedTypes = null;
-
-        var registryType = assembly.GetType("IL.VirtualViews.Generated.VirtualViewRegistry", throwOnError: false, ignoreCase: false);
-        if (registryType == null)
-        {
-            return false;
-        }
-
-        var method = registryType.GetMethod("GetVirtualViewTypes", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
-        if (method == null || method.ReturnType != typeof(Type[]))
-        {
-            return false;
-        }
-
-        generatedTypes = ((Type[]?)method.Invoke(null, null))?.Where(type => type != null) ?? [];
-        return true;
+        return reflectionTypes;
     }
 
     private static bool HasVirtualViewsAttributeSafely(Type type)
