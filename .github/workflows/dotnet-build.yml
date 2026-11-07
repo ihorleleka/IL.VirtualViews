@@ -20,13 +20,10 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: |
-          8.0.x
-          9.0.x
-          10.0.x
+        dotnet-version: 10.0.x
     - name: Restore dependencies
-      run: dotnet restore $PROJECT_PATH
-    - name: Build
-      run: dotnet build --no-restore $PROJECT_PATH
-    - name: Test
-      run: dotnet test --no-build --verbosity normal $PROJECT_PATH
+      run: dotnet restore Tests/IL.VirtualViews.Tests.csproj
+    - name: Build Release
+      run: dotnet build --no-restore --configuration Release Tests/IL.VirtualViews.Tests.csproj
+    - name: Test Release
+      run: dotnet test --no-build --configuration Release --verbosity normal Tests/IL.VirtualViews.Tests.csproj

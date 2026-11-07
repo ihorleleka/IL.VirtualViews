@@ -4,6 +4,7 @@ using IL.VirtualViews.Extensions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -17,6 +18,7 @@ public class RegistrationTests
     {
         var serviceCollection = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
         serviceCollection.AddSingleton<IWebHostEnvironment>(new MockWebHostEnvironment());
+        serviceCollection.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         serviceCollection.AddVirtualViewsCapabilities();
         var serviceProvider = serviceCollection.BuildServiceProvider();
         // Act

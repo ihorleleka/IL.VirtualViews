@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -38,6 +38,7 @@
   <ItemGroup>
     <None Remove="VirtualViewsFolder\Test.virtual.cshtml" />
     <None Remove="RazorRendering\DebugVirtualView.virtual.cshtml" />
+    <AdditionalFiles Include="..\TestTemplates\External.virtual.cshtml" />
     <AdditionalFiles Include="VirtualViewsFolder\Test.virtual.cshtml" />
     <AdditionalFiles Include="RazorRendering\DebugVirtualView.virtual.cshtml" />
   </ItemGroup>

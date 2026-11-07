@@ -1,6 +1,6 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PackageVersion>1.9.2.3</PackageVersion>
@@ -14,29 +14,23 @@
         <RepositoryUrl>https://github.com/lelekaihor/IL.VirtualViews</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-        <PackageReadmeFile>Readme.md</PackageReadmeFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <PackageReference Include="IL.Misc" Version="1.5.1.2" />
         <None Include="LICENSE.txt" Pack="true" Visible="false" PackagePath="" />
-        <None Include="Readme.md" Pack="true" Visible="false" PackagePath="" />
+        <None Include="README.md" Pack="true" Visible="false" PackagePath="" />
         <None Include="$(MSBuildThisFileDirectory)..\IL.VirtualViews.Generation\bin\$(Configuration)\netstandard2.0\IL.VirtualViews.Generation.dll"
               Pack="true"
               PackagePath="analyzers/dotnet/cs"
               Visible="false" />
     </ItemGroup>
-    <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[8.0.0,9.0.0)" />
-    </ItemGroup>
-    <ItemGroup Condition=" '$(TargetFramework)' == 'net9.0' ">
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[9.0.0,10.0.0)" />
-    </ItemGroup>
-    <ItemGroup Condition=" '$(TargetFramework)' == 'net10.0' ">
+    <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[10.0.0,11.0.0)" />
     </ItemGroup>
     <ItemGroup>
-      <ProjectReference Include="..\IL.VirtualViews.Generation\IL.VirtualViews.Generation.csproj">
+      <ProjectReference Include="..\IL.VirtualViews.Generation\IL.VirtualViews.Generation.csproj" ReferenceOutputAssembly="false">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </ProjectReference>

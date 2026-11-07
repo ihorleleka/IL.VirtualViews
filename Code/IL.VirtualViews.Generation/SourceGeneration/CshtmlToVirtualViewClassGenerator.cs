@@ -26,7 +26,9 @@ public sealed class CshtmlToVirtualViewClassGenerator : IIncrementalGenerator
                 var className = Path.GetFileNameWithoutExtension(cshtmlFile.Path);
                 className = className.Replace(".virtual", string.Empty);
                 var content = cshtmlFile.GetText(cancellationToken)?.ToString() ?? string.Empty;
-                return new GenerationClass(className, content, cshtmlFile.Path);
+                // Linked AdditionalFiles can contain '..' segments. Normalize before
+                // deriving the namespace so external solution folders remain valid C#.
+                return new GenerationClass(className, content, Path.GetFullPath(cshtmlFile.Path));
             })
             .Collect();
 

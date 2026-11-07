@@ -2,6 +2,8 @@
 # IL.VirtualViews
 Library which allows virtually register *.cshtml file as .cs classes with special attributes.
 
+Targets .NET 10 only. The source generator uses `netstandard2.0` for compiler-host compatibility.
+
 # How to use
 
 * Reference IL.VirtualViews in your project
@@ -58,6 +60,23 @@ public partial class Test : IVirtualView
 ```
 
 Then you only need to create non-auto-generated partial part and decorate it with `VirtualViewPath` attribute with desired path original view was supposed to be handled for.
+
+## External folders and compilation
+
+Link `.virtual.cshtml` templates from another solution folder as Additional Files:
+
+```xml
+<AdditionalFiles Include="../SharedTemplates/Report.virtual.cshtml" />
+```
+
+Use a matching partial class in the generated namespace and apply
+`VirtualViewPath` to select its virtual Razor location. The source generator
+normalizes linked paths containing `..` before deriving the namespace.
+
+Template text is embedded in the generated assembly. Razor compiles each view
+on first use and reuses its normal compilation cache on subsequent requests.
+This is the existing behavior in both Debug and Release, not build-time Razor
+precompilation or eager startup compilation. No extra compiler cache is needed.
 
 # Debugging virtual views
 

@@ -9,10 +9,12 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
+using Microsoft.AspNetCore.Mvc.Razor.Compilation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -34,6 +36,9 @@ public class RazorRenderingTests
             services.AddSingleton<DiagnosticListener>(_ => new DiagnosticListener("IL.VirtualViews.Tests"));
             services.AddSingleton<DiagnosticSource>(provider => provider.GetRequiredService<DiagnosticListener>());
             services.AddLogging();
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["VirtualViews:Debug"] = "true" })
+                .Build());
             services.AddVirtualViewsCapabilities("IL.VirtualViews.Tests");
 
             var serviceProvider = services.BuildServiceProvider();
@@ -70,6 +75,9 @@ public class RazorRenderingTests
             services.AddSingleton<DiagnosticListener>(_ => new DiagnosticListener("IL.VirtualViews.Tests"));
             services.AddSingleton<DiagnosticSource>(provider => provider.GetRequiredService<DiagnosticListener>());
             services.AddLogging();
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["VirtualViews:Debug"] = "true" })
+                .Build());
             services.AddVirtualViewsCapabilities("IL.VirtualViews.Tests");
 
             var serviceProvider = services.BuildServiceProvider();
@@ -90,6 +98,44 @@ public class RazorRenderingTests
         {
             Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", previousEnvironment);
         }
+    }
+
+    [Fact]
+    public async Task External_virtual_template_renders_at_registered_path_and_uses_Razors_existing_cache()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton<IWebHostEnvironment>(new MockWebHostEnvironment { EnvironmentName = "Production" });
+        services.AddSingleton<DiagnosticListener>(_ => new DiagnosticListener("IL.VirtualViews.ExternalTemplateTests"));
+        services.AddSingleton<DiagnosticSource>(provider => provider.GetRequiredService<DiagnosticListener>());
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddLogging();
+        services.AddVirtualViewsCapabilities("IL.VirtualViews.Tests");
+        using var provider = services.BuildServiceProvider();
+
+        const string virtualPath = "/views/external.cshtml";
+        var files = Assert.Single(provider.GetRequiredService<IOptions<MvcRazorRuntimeCompilationOptions>>()
+            .Value.FileProviders.OfType<VirtualViewsProvider>());
+        var file = files.GetFileInfo(virtualPath);
+        Assert.True(file.Exists);
+        Assert.Null(file.PhysicalPath); // Rendering uses embedded content, not the linked source file.
+
+        var compiler = provider.GetRequiredService<IViewCompilerProvider>().GetCompiler();
+        Assert.Equal("RuntimeViewCompiler", compiler.GetType().Name);
+        var compiled = await compiler.CompileAsync(virtualPath);
+        Assert.NotNull(compiled.Item);
+        Assert.Equal(virtualPath, compiled.Item.Identifier);
+
+        foreach (var message in new[] { "First <model>", "Second & fresh model", "Third render" })
+        {
+            using var scope = provider.CreateScope();
+            var html = await RenderAsync(scope.ServiceProvider, virtualPath, message);
+            Assert.Contains($"<p data-external=\"true\">{System.Text.Encodings.Web.HtmlEncoder.Default.Encode(message)}</p>", html);
+            Assert.Same(compiled, await compiler.CompileAsync(virtualPath));
+        }
+
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 16)
+            .Select(_ => Task.Run(() => compiler.CompileAsync(virtualPath))));
+        Assert.All(concurrent, descriptor => Assert.Same(compiled, descriptor));
     }
 
     private static async Task<string> RenderAsync(IServiceProvider serviceProvider, string viewPath, object model)

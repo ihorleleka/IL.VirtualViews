@@ -1,7 +1,4 @@
-﻿#if NET8_0_OR_GREATER
 using System.Collections.Frozen;
-#endif
-using System.Collections.Immutable;
 using System.Reflection;
 using IL.VirtualViews.Attributes;
 using IL.VirtualViews.Interfaces;
@@ -12,11 +9,7 @@ namespace IL.VirtualViews.ContentProvider;
 
 public sealed class VirtualViewsProvider : IFileProvider
 {
-#if NET8_0_OR_GREATER
     private FrozenDictionary<string, ViewDescriptor> SupportedTypes { get; }
-#else
-    private ImmutableDictionary<string, ViewDescriptor> SupportedTypes { get; }
-#endif
 
     public VirtualViewsProvider(List<Type> supportedTypes, bool debugPhysicalFilesEnabled = false)
     {
@@ -25,12 +18,7 @@ public sealed class VirtualViewsProvider : IFileProvider
             : null;
 
         SupportedTypes = supportedTypes
-
-#if NET8_0_OR_GREATER
             .ToFrozenDictionary(
-#else
-            .ToImmutableDictionary(
-#endif
                 keySelector => (keySelector.GetCustomAttributes().First(x => x is VirtualViewPathAttribute) as VirtualViewPathAttribute)!.Path,
                 valueSelector =>
                 {
