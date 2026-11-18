@@ -1,5 +1,3 @@
-using IL.VirtualViews.Attributes;
-
 namespace IL.VirtualViews.Tests.VirtualViewsFolder;
 
 public class TestAttribute : VirtualViewPathAttribute

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>IL.VirtualViews.Build</AssemblyName>
+    <UseAppHost>false</UseAppHost>
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+  <Target Name="GetVirtualViewsToolPackageFiles" Returns="@(_VirtualViewsToolPackageFile)">
+    <ItemGroup>
+      <_VirtualViewsToolPackageFile Include="$(TargetDir)**/*" />
+      <_VirtualViewsToolPackageFile Update="@(_VirtualViewsToolPackageFile)">
+        <ToolPackagePath>tools/net10.0/any/%(_VirtualViewsToolPackageFile.RecursiveDir)%(_VirtualViewsToolPackageFile.Filename)%(_VirtualViewsToolPackageFile.Extension)</ToolPackagePath>
+      </_VirtualViewsToolPackageFile>
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

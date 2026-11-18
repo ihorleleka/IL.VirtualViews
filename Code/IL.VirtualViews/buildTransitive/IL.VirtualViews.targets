@@ -1,0 +1,71 @@
+<Project>
+  <PropertyGroup>
+    <!-- NuGet imports this before the base SDK targets. Defer compiler setup until
+         those targets are loaded; Web/Razor projects keep their existing setup. -->
+    <AfterMicrosoftNETSdkTargets Condition="'$(UsingMicrosoftNETSdkRazor)' != 'true' and '$(TargetFramework)' != ''">$(AfterMicrosoftNETSdkTargets);$(MSBuildThisFileDirectory)internal/IL.VirtualViews.Razor.targets</AfterMicrosoftNETSdkTargets>
+    <AddRazorSupportForMvc Condition="'$(AddRazorSupportForMvc)' == ''">true</AddRazorSupportForMvc>
+    <VirtualViewsBuildToolPath Condition="'$(VirtualViewsBuildToolPath)' == ''">$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'tools', 'net10.0', 'any', 'IL.VirtualViews.Build.dll'))</VirtualViewsBuildToolPath>
+  </PropertyGroup>
+
+  <!-- ResolveRazorConfiguration is an unconditional late Razor preparation
+       target. Materialize there, before SDK conditional input assignment, even
+       when virtual templates are the project's only Razor files. Do not hook
+       early ResolveRazorGenerateInputs: reference resolution would form a cycle. -->
+  <Target Name="VirtualViewsMaterializeTemplates"
+          BeforeTargets="ResolveRazorConfiguration;AssignRazorGenerateTargetPaths;CoreCompile"
+          DependsOnTargets="ResolveReferences"
+          Condition="'$(IsCrossTargetingBuild)' != 'true'">
+    <Error Condition="!Exists('$(VirtualViewsBuildToolPath)')"
+           Text="VirtualViews build tool was not found at '$(VirtualViewsBuildToolPath)'. Restore/reinstall IL.VirtualViews or set VirtualViewsBuildToolPath." />
+    <PropertyGroup>
+      <!-- MSBuild's path helper works in both Visual Studio (.NET Framework)
+           and dotnet MSBuild; Path.GetFullPath(path, basePath) does not. -->
+      <_VirtualViewsOutputPath>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'VirtualViews'))</_VirtualViewsOutputPath>
+      <_VirtualViewsManifest>$([MSBuild]::NormalizePath('$(_VirtualViewsOutputPath)', 'inputs.txt'))</_VirtualViewsManifest>
+      <_VirtualViewsDefines>$(DefineConstants.Replace(';', ','))</_VirtualViewsDefines>
+      <_VirtualViewsDotNet Condition="'$(DotNetHostPath)' != ''">$(DotNetHostPath)</_VirtualViewsDotNet>
+      <_VirtualViewsDotNet Condition="'$(_VirtualViewsDotNet)' == ''">dotnet</_VirtualViewsDotNet>
+    </PropertyGroup>
+    <MakeDir Directories="$(_VirtualViewsOutputPath)" />
+    <ItemGroup>
+      <_VirtualViewsInputLine Include="@(Compile->'C|%(FullPath)')" />
+      <_VirtualViewsInputLine Include="@(AdditionalFiles->'A|%(FullPath)')" />
+      <_VirtualViewsInputLine Include="@(ReferencePath->'R|%(FullPath)')" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_VirtualViewsManifest)" Lines="@(_VirtualViewsInputLine)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" Encoding="UTF-8" />
+    <Exec Command="&quot;$(_VirtualViewsDotNet)&quot; &quot;$(VirtualViewsBuildToolPath)&quot; --manifest &quot;$(_VirtualViewsManifest)&quot; --output &quot;$(_VirtualViewsOutputPath)&quot; --assembly &quot;$(AssemblyName)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --defines &quot;$(_VirtualViewsDefines)&quot; --language &quot;$(LangVersion)&quot;" />
+    <MSBuild Projects="$(_VirtualViewsOutputPath)/razor-inputs.proj" Targets="GetRazorInputs">
+      <Output TaskParameter="TargetOutputs" ItemName="_VirtualViewsRazorInput" />
+    </MSBuild>
+    <Error Condition="'@(_VirtualViewsRazorInput)' != '' and '$(UsingMicrosoftNETSdkRazor)' != 'true'"
+           Text="IL.VirtualViews could not initialize Razor build-time compilation. Restore the package build assets and check for conflicting SDK customization." />
+    <Error Condition="'@(_VirtualViewsRazorInput)' != '' and '$(RazorCompileOnBuild)' == 'false'"
+           Text="IL.VirtualViews requires RazorCompileOnBuild=true for build-time compilation; runtime compilation is not supported." />
+    <Error Condition="'@(_VirtualViewsRazorInput)' != '' and '$(UseRazorSourceGenerator)' == 'false'"
+           Text="IL.VirtualViews requires UseRazorSourceGenerator=true so compiled views reside in the consumer assembly." />
+    <Error Condition="'@(_VirtualViewsRazorInput)' != '' and '$(AddRazorSupportForMvc)' != 'true'"
+           Text="IL.VirtualViews requires AddRazorSupportForMvc=true. Microsoft.NET.Sdk.Web sets this automatically; Razor class libraries must enable it explicitly." />
+    <ReadLinesFromFile File="$(_VirtualViewsOutputPath)/generated.files">
+      <Output TaskParameter="Lines" ItemName="_VirtualViewsOwnedTemplate" />
+    </ReadLinesFromFile>
+    <ReadLinesFromFile File="$(_VirtualViewsOutputPath)\generated.csfiles">
+      <Output TaskParameter="Lines" ItemName="_VirtualViewsGeneratedClass" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <Compile Include="@(_VirtualViewsGeneratedClass)" />
+      <!-- The build tool owns virtual templates. Do not pass their raw contents
+           to Razor's generator as ordinary physical views as well. -->
+      <AdditionalFiles Remove="@(AdditionalFiles)" Condition="$([System.String]::Copy('%(AdditionalFiles.Identity)').ToLowerInvariant().EndsWith('.virtual.cshtml'))" />
+      <RazorGenerate Remove="@(RazorGenerate)" Condition="$([System.String]::Copy('%(RazorGenerate.Identity)').ToLowerInvariant().EndsWith('.virtual.cshtml'))" />
+      <!-- Preserve original physical files for Razor #line directives and PDBs;
+           TargetPath metadata retains the synthetic compiled-item identity. -->
+      <RazorGenerate Include="@(_VirtualViewsRazorInput)" />
+      <!-- The SDK's _PrepareRazorSourceGenerators encodes TargetPath and adds these
+           RazorGenerateWithTargetPath items to AdditionalFiles itself. Adding them
+           here too would create duplicate Razor source-generator inputs. -->
+      <!-- Original Razor inputs are user files: never include them in FileWrites. -->
+      <FileWrites Include="@(_VirtualViewsOwnedTemplate);@(_VirtualViewsGeneratedClass);$(_VirtualViewsManifest);$(_VirtualViewsOutputPath)/generated.files;$(_VirtualViewsOutputPath)/generated.csfiles;$(_VirtualViewsOutputPath)/razor-inputs.proj" />
+    </ItemGroup>
+  </Target>
+</Project>

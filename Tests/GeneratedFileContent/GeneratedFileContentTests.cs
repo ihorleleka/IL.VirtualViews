@@ -1,5 +1,4 @@
 using IL.VirtualViews.Tests.VirtualViewsFolder;
-using Xunit;
 
 namespace IL.VirtualViews.Tests.GeneratedFileContent;
 

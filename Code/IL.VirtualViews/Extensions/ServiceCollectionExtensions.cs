@@ -1,10 +1,8 @@
-﻿using System.Reflection;
+using System.Reflection;
 using IL.Misc.Helpers;
 using IL.VirtualViews.Attributes;
-using IL.VirtualViews.ContentProvider;
 using IL.VirtualViews.Interfaces;
-using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IL.VirtualViews.Extensions;
@@ -12,85 +10,52 @@ namespace IL.VirtualViews.Extensions;
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddVirtualViewsCapabilities(this IServiceCollection serviceCollection)
-    {
-        return serviceCollection.AddVirtualViewsCapabilities("*");
-    }
+        => serviceCollection.AddVirtualViewsCapabilities("*");
 
     public static IServiceCollection AddVirtualViewsCapabilities(this IServiceCollection serviceCollection, params string[] assembliesFilter)
     {
-        return serviceCollection.AddVirtualViewsCapabilities(_ => { }, assembliesFilter);
-    }
-
-    public static IServiceCollection AddVirtualViewsCapabilities(
-        this IServiceCollection serviceCollection,
-        Action<VirtualViewsRegistrationOptions> configureOptions,
-        params string[] assembliesFilter)
-    {
-        serviceCollection
-            .AddControllersWithViews()
-            .AddRazorRuntimeCompilation();
-
-        var options = new VirtualViewsRegistrationOptions();
-        configureOptions(options);
-        var debugPhysicalFilesEnabled = options.EnableDebugPhysicalFiles;
-        var allAssemblies = TypesAndAssembliesHelper
-            .GetAssemblies(assembliesFilter)
-            .Where(assembly => !assembly.IsDynamic)
-            .ToList();
-
-        var supportedTypes = allAssemblies
-            .SelectMany(GetSupportedTypesForAssembly)
-            .Distinct()
-            .ToList();
-
-        serviceCollection.AddOptions<MvcRazorRuntimeCompilationOptions>().Configure<IConfiguration>((runtimeCompilationOptions, configuration) =>
+        ArgumentNullException.ThrowIfNull(serviceCollection);
+        var assemblies = TypesAndAssembliesHelper.GetAssemblies(assembliesFilter)
+            .Where(assembly => !assembly.IsDynamic).Distinct().ToList();
+        var supportedTypes = assemblies.SelectMany(GetSupportedTypesForAssembly).Distinct().ToList();
+        var mvc = serviceCollection.AddControllersWithViews();
+        mvc.ConfigureApplicationPartManager(manager =>
         {
-            var isDebugEnabled = debugPhysicalFilesEnabled ?? configuration.GetValue<bool>("VirtualViews:Debug");
-            RemoveVirtualViewsProviders(runtimeCompilationOptions);
-            runtimeCompilationOptions.FileProviders.Add(new VirtualViewsProvider(supportedTypes, isDebugEnabled));
-        });
+            foreach (var assembly in supportedTypes.Select(type => type.Assembly).Distinct())
+            {
+                // A plain Razor SDK library need not advertise a Razor application-part
+                // factory. Add its compiled items explicitly, without discovering unrelated
+                // controllers from every assembly matched by the registration filter.
+                if (!manager.ApplicationParts.OfType<CompiledRazorAssemblyPart>().Any(part => part.Assembly == assembly))
+                    manager.ApplicationParts.Add(new CompiledRazorAssemblyPart(assembly));
+            }
 
+            var provider = manager.FeatureProviders.OfType<VirtualViewsFeatureProvider>().SingleOrDefault();
+            if (provider == null)
+            {
+                provider = new VirtualViewsFeatureProvider();
+                manager.FeatureProviders.Add(provider);
+            }
+            provider.AddTypes(supportedTypes);
+        });
         return serviceCollection;
     }
 
     private static IEnumerable<Type> GetSupportedTypesForAssembly(Assembly assembly)
-    {
-        var reflectionTypes = TypesAndAssembliesHelper
-            .GetExportedTypes(assembly)
+        => TypesAndAssembliesHelper.GetExportedTypes(assembly)
             .Where(type => type is { IsAbstract: false, IsGenericTypeDefinition: false })
-            .Where(HasVirtualViewsAttributeSafely)
-            .Where(HasIVirtualViewInterface);
-
-        return reflectionTypes;
-    }
+            .Where(type => typeof(IVirtualView).IsAssignableFrom(type))
+            .Where(HasVirtualViewsAttributeSafely);
 
     private static bool HasVirtualViewsAttributeSafely(Type type)
     {
         try
         {
-            return type
-                .CustomAttributes
-                .Any(x => typeof(VirtualViewPathAttribute).IsAssignableFrom(x.AttributeType));
+            return type.GetCustomAttributes<VirtualViewPathAttribute>(inherit: true).Any();
         }
         catch
         {
             return false;
-        }
-    }
-
-    private static bool HasIVirtualViewInterface(Type type)
-    {
-        return type.GetInterfaces().Any(x => x == typeof(IVirtualView));
-    }
-
-    private static void RemoveVirtualViewsProviders(MvcRazorRuntimeCompilationOptions runtimeCompilationOptions)
-    {
-        for (var i = runtimeCompilationOptions.FileProviders.Count - 1; i >= 0; i--)
-        {
-            if (runtimeCompilationOptions.FileProviders[i] is VirtualViewsProvider)
-            {
-                runtimeCompilationOptions.FileProviders.RemoveAt(i);
-            }
         }
     }
 }

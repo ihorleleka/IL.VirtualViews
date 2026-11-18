@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <VirtualViewsBuildToolPath>$(MSBuildThisFileDirectory)../Code/IL.VirtualViews.Build/bin/$(Configuration)/net10.0/IL.VirtualViews.Build.dll</VirtualViewsBuildToolPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,7 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Code\IL.VirtualViews\IL.VirtualViews.csproj" />
-    <ProjectReference Include="..\Code\IL.VirtualViews.Generation\IL.VirtualViews.Generation.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Code\IL.VirtualViews.Build\IL.VirtualViews.Build.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,4 +44,22 @@
     <AdditionalFiles Include="RazorRendering\DebugVirtualView.virtual.cshtml" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- ContentWithTargetPath is used because the Razor SDK (evaluated after this file)
+         removes **/*.cshtml from None/Content, which would drop in-project templates. -->
+    <ContentWithTargetPath Include="RazorRendering/DebugVirtualView.virtual.cshtml" CopyToOutputDirectory="PreserveNewest" TargetPath="TestAssets/DebugSources/DebugVirtualView.virtual.cshtml" />
+    <ContentWithTargetPath Include="../TestTemplates/External.virtual.cshtml" CopyToOutputDirectory="PreserveNewest" TargetPath="TestAssets/DebugSources/External.virtual.cshtml" />
+  </ItemGroup>
+
+  <!-- Stage the real package at build time. Tests consume output assets directly;
+       they never locate the checkout, copy source, or invoke a packaging script. -->
+  <Target Name="StageVirtualViewsPackageForTests" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
+    <MSBuild Projects="../Code/IL.VirtualViews/IL.VirtualViews.csproj"
+             Targets="Pack"
+             RemoveProperties="TargetFramework;RuntimeIdentifier"
+             Properties="Configuration=$(Configuration);NoBuild=true;PackageVersion=0.0.0-buildtime-test;PackageOutputPath=$(TargetDir)TestAssets/Packages;NuspecOutputPath=$(IntermediateOutputPath)TestPackage/" />
+  </Target>
+
+  <!-- ProjectReference consumers import package build assets explicitly. -->
+  <Import Project="../Code/IL.VirtualViews/buildTransitive/IL.VirtualViews.targets" />
 </Project>

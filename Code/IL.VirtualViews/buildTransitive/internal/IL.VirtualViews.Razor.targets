@@ -1,0 +1,11 @@
+<Project>
+  <!-- Loaded after the base .NET SDK, matching the Razor/Web SDK ordering.
+       Import only Razor compiler infrastructure, not static-web-asset tooling. -->
+  <PropertyGroup>
+    <AddRazorSupportForMvc Condition="'$(AddRazorSupportForMvc)' == ''">true</AddRazorSupportForMvc>
+  </PropertyGroup>
+  <ImportGroup Condition="'$(UsingMicrosoftNETSdkRazor)' != 'true'">
+    <Import Project="../targets/Sdk.Razor.CurrentVersion.props" Sdk="Microsoft.NET.Sdk.Razor" />
+    <Import Project="../targets/Sdk.Razor.CurrentVersion.targets" Sdk="Microsoft.NET.Sdk.Razor" />
+  </ImportGroup>
+</Project>

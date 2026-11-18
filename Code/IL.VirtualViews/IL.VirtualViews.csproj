@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -20,21 +20,21 @@
         <PackageReference Include="IL.Misc" Version="2.0.0.1" />
         <None Include="LICENSE.txt" Pack="true" Visible="false" PackagePath="" />
         <None Include="README.md" Pack="true" Visible="false" PackagePath="" />
-        <None Include="$(MSBuildThisFileDirectory)..\IL.VirtualViews.Generation\bin\$(Configuration)\netstandard2.0\IL.VirtualViews.Generation.dll"
-              Pack="true"
-              PackagePath="analyzers/dotnet/cs"
-              Visible="false" />
-    </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[10.0.15,11.0.0)" />
-    </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[11.0.0,12.0.0)" />
     </ItemGroup>
     <ItemGroup>
-      <ProjectReference Include="..\IL.VirtualViews.Generation\IL.VirtualViews.Generation.csproj" ReferenceOutputAssembly="false">
-          <PrivateAssets>all</PrivateAssets>
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </ProjectReference>
+        <None Include="buildTransitive\**\*.targets" Pack="true" PackagePath="buildTransitive/" />
+        <ProjectReference Include="..\IL.VirtualViews.Build\IL.VirtualViews.Build.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     </ItemGroup>
+    <Target Name="IncludeVirtualViewsBuildTool" BeforeTargets="_GetPackageFiles">
+        <MSBuild Projects="../IL.VirtualViews.Build/IL.VirtualViews.Build.csproj"
+                 Targets="GetVirtualViewsToolPackageFiles"
+                 RemoveProperties="TargetFramework"
+                 Properties="Configuration=$(Configuration)">
+            <Output TaskParameter="TargetOutputs" ItemName="_VirtualViewsToolPackageFiles" />
+        </MSBuild>
+        <ItemGroup>
+            <None Include="@(_VirtualViewsToolPackageFiles)"
+                  Pack="true" PackagePath="%(_VirtualViewsToolPackageFiles.ToolPackagePath)" Visible="false" />
+        </ItemGroup>
+    </Target>
 </Project>

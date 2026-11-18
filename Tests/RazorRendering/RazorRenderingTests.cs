@@ -1,180 +1,91 @@
-using System.Globalization;
-using System.Diagnostics;
-using IL.VirtualViews.ContentProvider;
-using IL.VirtualViews.Extensions;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Mvc.Razor;
-using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
-using Microsoft.AspNetCore.Mvc.Razor.Compilation;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Options;
-using Xunit;
-
 namespace IL.VirtualViews.Tests.RazorRendering;
 
 public class RazorRenderingTests
 {
-    [Fact]
-    public async Task VirtualView_Should_Render_And_Expose_Debug_PhysicalPath_In_Development()
+    [Theory]
+    [InlineData("/views/debug-razor.cshtml", "<p>Hello &lt;world&gt;</p>")]
+    [InlineData("/views/external.cshtml", "<p data-external=\"true\">Hello &lt;world&gt;</p>")]
+    [InlineData("/views/test.cshtml", "<p>Test 123</p>")]
+    public async Task Generated_derived_attribute_and_external_templates_render_without_source(string path, string expected)
     {
-        var previousEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
-        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Development");
+        using var provider = CompiledViewTestHost.Create();
+        var rendered = await CompiledViewTestHost.RenderAsync(provider, path, "Hello <world>");
+        Assert.Contains(expected, rendered);
+    }
 
-        try
-        {
-            var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-            services.AddSingleton<IWebHostEnvironment>(new MockWebHostEnvironment());
-            services.AddSingleton<DiagnosticListener>(_ => new DiagnosticListener("IL.VirtualViews.Tests"));
-            services.AddSingleton<DiagnosticSource>(provider => provider.GetRequiredService<DiagnosticListener>());
-            services.AddLogging();
-            services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["VirtualViews:Debug"] = "true" })
-                .Build());
-            services.AddVirtualViewsCapabilities("IL.VirtualViews.Tests");
-
-            var serviceProvider = services.BuildServiceProvider();
-
-            var options = serviceProvider.GetRequiredService<IOptions<MvcRazorRuntimeCompilationOptions>>();
-            var virtualProvider = options.Value.FileProviders
-                .OfType<VirtualViewsProvider>()
-                .First();
-
-            var fileInfo = virtualProvider.GetFileInfo("/views/debug-razor.cshtml");
-            Assert.True(fileInfo.Exists);
-            Assert.False(string.IsNullOrWhiteSpace(fileInfo.PhysicalPath));
-            Assert.True(File.Exists(fileInfo.PhysicalPath));
-
-            var rendered = await RenderAsync(serviceProvider, "/views/debug-razor.cshtml", "Hello");
-            Assert.Contains("<p>Hello</p>", rendered);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", previousEnvironment);
-        }
+    [Theory]
+    [InlineData("/views/record.cshtml", "<p>Record template</p>")]
+    [InlineData("/_VirtualViews/custom.cshtml", "<code>/_VirtualViews/custom.cshtml</code>")]
+    [InlineData("/_VirtualViews/physical.cshtml", "<p>Physical Razor view</p>")]
+    public async Task Record_and_user_views_under_the_synthetic_prefix_remain_renderable(string path, string expected)
+    {
+        using var provider = CompiledViewTestHost.Create();
+        var rendered = await CompiledViewTestHost.RenderAsync(provider, path, "ignored");
+        Assert.Contains(expected, rendered);
     }
 
     [Fact]
-    public async Task DerivedVirtualViewAttribute_Should_Register_And_Render()
+    public async Task Escaped_identifier_template_exposes_the_registered_page_path()
     {
-        var previousEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
-        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Development");
-
-        try
-        {
-            var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-            services.AddSingleton<IWebHostEnvironment>(new MockWebHostEnvironment());
-            services.AddSingleton<DiagnosticListener>(_ => new DiagnosticListener("IL.VirtualViews.Tests"));
-            services.AddSingleton<DiagnosticSource>(provider => provider.GetRequiredService<DiagnosticListener>());
-            services.AddLogging();
-            services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["VirtualViews:Debug"] = "true" })
-                .Build());
-            services.AddVirtualViewsCapabilities("IL.VirtualViews.Tests");
-
-            var serviceProvider = services.BuildServiceProvider();
-            var options = serviceProvider.GetRequiredService<IOptions<MvcRazorRuntimeCompilationOptions>>();
-            var virtualProvider = options.Value.FileProviders
-                .OfType<VirtualViewsProvider>()
-                .First();
-
-            var fileInfo = virtualProvider.GetFileInfo("/views/test.cshtml");
-            Assert.True(fileInfo.Exists);
-            Assert.False(string.IsNullOrWhiteSpace(fileInfo.PhysicalPath));
-            Assert.True(File.Exists(fileInfo.PhysicalPath));
-
-            var rendered = await RenderAsync(serviceProvider, "/views/test.cshtml", "ignored");
-            Assert.Contains("<p>Test 123</p>", rendered);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", previousEnvironment);
-        }
+        using var provider = CompiledViewTestHost.Create();
+        var rendered = await CompiledViewTestHost.RenderAsync(provider, "/views/escaped.cshtml", "ignored");
+        Assert.Contains("<code>/views/escaped.cshtml</code>", rendered);
+        Assert.DoesNotContain("/_VirtualViews/", rendered);
     }
 
     [Fact]
-    public async Task External_virtual_template_renders_at_registered_path_and_uses_Razors_existing_cache()
+    public async Task Handwritten_constant_template_uses_the_consuming_assembly_model_identity()
     {
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-        services.AddSingleton<IWebHostEnvironment>(new MockWebHostEnvironment { EnvironmentName = "Production" });
-        services.AddSingleton<DiagnosticListener>(_ => new DiagnosticListener("IL.VirtualViews.ExternalTemplateTests"));
-        services.AddSingleton<DiagnosticSource>(provider => provider.GetRequiredService<DiagnosticListener>());
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        services.AddLogging();
-        services.AddVirtualViewsCapabilities("IL.VirtualViews.Tests");
-        using var provider = services.BuildServiceProvider();
-
-        const string virtualPath = "/views/external.cshtml";
-        var files = Assert.Single(provider.GetRequiredService<IOptions<MvcRazorRuntimeCompilationOptions>>()
-            .Value.FileProviders.OfType<VirtualViewsProvider>());
-        var file = files.GetFileInfo(virtualPath);
-        Assert.True(file.Exists);
-        Assert.Null(file.PhysicalPath); // Rendering uses embedded content, not the linked source file.
-
+        using var provider = CompiledViewTestHost.Create();
+        var model = new HandwrittenModel("A <typed> model");
         var compiler = provider.GetRequiredService<IViewCompilerProvider>().GetCompiler();
-        Assert.Equal("RuntimeViewCompiler", compiler.GetType().Name);
-        var compiled = await compiler.CompileAsync(virtualPath);
+        var compiled = await compiler.CompileAsync("/views/handwritten.cshtml");
         Assert.NotNull(compiled.Item);
-        Assert.Equal(virtualPath, compiled.Item.Identifier);
+        Assert.Same(typeof(HandwrittenModel).Assembly, compiled.Item.Type.Assembly);
+        Assert.Equal(typeof(HandwrittenModel), compiled.Item.Type.GetProperty("Model")!.PropertyType);
+        var rendered = await CompiledViewTestHost.RenderAsync(provider, "/views/handwritten.cshtml", model);
+        Assert.Contains("<strong>A &lt;typed&gt; model</strong>", rendered);
+    }
 
-        foreach (var message in new[] { "First <model>", "Second & fresh model", "Third render" })
+    [Fact]
+    public async Task Compiled_views_reuse_MVC_cache_but_render_fresh_models_concurrently()
+    {
+        using var provider = CompiledViewTestHost.Create();
+        const string path = "/views/external.cshtml";
+        var compiler = provider.GetRequiredService<IViewCompilerProvider>().GetCompiler();
+        Assert.Equal("DefaultViewCompiler", compiler.GetType().Name);
+        var compiled = await compiler.CompileAsync(path);
+        Assert.NotNull(compiled.Item);
+
+        foreach (var model in new[] { "First <model>", "Second & fresh model", "Third render" })
         {
-            using var scope = provider.CreateScope();
-            var html = await RenderAsync(scope.ServiceProvider, virtualPath, message);
-            Assert.Contains($"<p data-external=\"true\">{System.Text.Encodings.Web.HtmlEncoder.Default.Encode(message)}</p>", html);
-            Assert.Same(compiled, await compiler.CompileAsync(virtualPath));
+            var rendered = await CompiledViewTestHost.RenderAsync(provider, path, model);
+            Assert.Contains($"<p data-external=\"true\">{HtmlEncoder.Default.Encode(model)}</p>", rendered);
+            Assert.Same(compiled, await compiler.CompileAsync(path));
         }
 
-        var concurrent = await Task.WhenAll(Enumerable.Range(0, 16)
-            .Select(_ => Task.Run(() => compiler.CompileAsync(virtualPath))));
-        Assert.All(concurrent, descriptor => Assert.Same(compiled, descriptor));
-    }
-
-    private static async Task<string> RenderAsync(IServiceProvider serviceProvider, string viewPath, object model)
-    {
-        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
-        var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
-
-        var razorViewEngine = serviceProvider.GetRequiredService<IRazorViewEngine>();
-        var tempDataProvider = serviceProvider.GetRequiredService<ITempDataProvider>();
-
-        var viewResult = razorViewEngine.GetView(executingFilePath: null, viewPath: viewPath, isMainPage: true);
-        Assert.True(viewResult.Success);
-
-        await using var writer = new StringWriter(CultureInfo.InvariantCulture);
-        var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
+        var results = await Task.WhenAll(Enumerable.Range(0, 16).Select(index => Task.Run(async () =>
         {
-            Model = model
-        };
-
-        var viewContext = new ViewContext(
-            actionContext,
-            viewResult.View,
-            viewData,
-            new TempDataDictionary(httpContext, tempDataProvider),
-            writer,
-            new HtmlHelperOptions()
-        );
-
-        await viewResult.View.RenderAsync(viewContext);
-        return writer.ToString();
+            var model = $"Concurrent <{index}>";
+            var descriptor = await compiler.CompileAsync(path);
+            var rendered = await CompiledViewTestHost.RenderAsync(provider, path, model);
+            return (descriptor, rendered, model);
+        })));
+        Assert.All(results, result =>
+        {
+            Assert.Same(compiled, result.descriptor);
+            Assert.Contains($"<p data-external=\"true\">{HtmlEncoder.Default.Encode(result.model)}</p>", result.rendered);
+        });
     }
 
-    private class MockWebHostEnvironment : IWebHostEnvironment
+    [Fact]
+    public async Task Compiled_layout_and_partial_resolve_registered_absolute_paths()
     {
-        public string EnvironmentName { get; set; } = "Development";
-        public string ApplicationName { get; set; } = "IL.VirtualViews.Tests";
-        public string WebRootPath { get; set; } = "wwwroot";
-        public string ContentRootPath { get; set; } = "ContentRoot";
-        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        using var provider = CompiledViewTestHost.Create();
+        var rendered = await CompiledViewTestHost.RenderAsync(provider, "/views/composed.cshtml", "Composed <model>");
+        Assert.Contains("<main>", rendered);
+        Assert.Contains("<article>Composed &lt;model&gt;</article>", rendered);
+        Assert.Contains("<aside>Composed &lt;model&gt;</aside>", rendered);
+        Assert.Contains("</main>", rendered);
     }
 }
