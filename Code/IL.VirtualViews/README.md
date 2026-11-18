@@ -1,7 +1,7 @@
 # IL.VirtualViews
 Library which allows virtually register *.cshtml file as .cs classes with special attributes.
 
-Targets .NET 10 only. The source generator uses `netstandard2.0` for compiler-host compatibility.
+Targets .NET 10 and .NET 11, with matching ASP.NET Core Razor runtime compilation dependencies. The source generator remains on `netstandard2.0` and Roslyn 5.0 APIs for .NET 10 SDK compiler-host compatibility.
 
 # How to use
 

@@ -1,9 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <PackageVersion>1.9.2.3</PackageVersion>
         <RootNamespace>IL.VirtualViews</RootNamespace>
         <Title>Virtual Views</Title>
         <Authors>Ihor Leleka</Authors>
@@ -18,7 +17,7 @@
     </PropertyGroup>
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <PackageReference Include="IL.Misc" Version="1.5.1.2" />
+        <PackageReference Include="IL.Misc" Version="2.0.0.1" />
         <None Include="LICENSE.txt" Pack="true" Visible="false" PackagePath="" />
         <None Include="README.md" Pack="true" Visible="false" PackagePath="" />
         <None Include="$(MSBuildThisFileDirectory)..\IL.VirtualViews.Generation\bin\$(Configuration)\netstandard2.0\IL.VirtualViews.Generation.dll"
@@ -26,8 +25,11 @@
               PackagePath="analyzers/dotnet/cs"
               Visible="false" />
     </ItemGroup>
-    <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[10.0.0,11.0.0)" />
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[10.0.15,11.0.0)" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="[11.0.0,12.0.0)" />
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\IL.VirtualViews.Generation\IL.VirtualViews.Generation.csproj" ReferenceOutputAssembly="false">

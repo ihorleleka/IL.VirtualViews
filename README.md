@@ -2,7 +2,13 @@
 # IL.VirtualViews
 Library which allows virtually register *.cshtml file as .cs classes with special attributes.
 
-Targets .NET 10 only. The source generator uses `netstandard2.0` for compiler-host compatibility.
+Targets .NET 10 and .NET 11, with matching ASP.NET Core Razor runtime compilation dependencies. The source generator remains on `netstandard2.0` and Roslyn 5.0 APIs for .NET 10 SDK compiler-host compatibility.
+
+## Release versioning
+
+The tag pipeline validates `[v]major.minor.patch[.revision][-prerelease][+metadata]` through the [shared-contract parser](.github/scripts/Set-ReleaseVersion.ps1) before restore/build/pack. It injects Version, PackageVersion, AssemblyVersion, FileVersion and InformationalVersion consistently. Assembly/file versions use the four-part numeric core; informational versions retain prerelease/build metadata without an extra SDK commit suffix. NuGet omits build metadata from package identity/filenames, so changing only `+metadata` does not create a distinct package release.
+
+[Conditional defaults](Directory.Build.props) give untagged/local builds `0.0.0-dev`; explicit overrides remain supported. No source release number is pinned. Existing tag-only publishing behavior is retained. Run the [parser regression tests](.github/scripts/Test-ReleaseVersion.ps1) when changing this policy.
 
 # How to use
 

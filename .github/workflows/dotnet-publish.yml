@@ -16,24 +16,40 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-    - uses: actions/checkout@v3
-    - name: Set Version Variable
-      if: ${{ github.ref_type == 'tag' }}
+    - uses: actions/checkout@v7
+    - name: Test release tag validation
+      shell: pwsh
+      run: ./.github/scripts/Test-ReleaseVersion.ps1
+    - name: Derive all release metadata from tag
+      shell: pwsh
       env:
-        TAG: ${{ github.ref_name }}
-      run: echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: ./.github/scripts/Set-ReleaseVersion.ps1 -Tag $env:RELEASE_TAG
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: 10.0.x
+        dotnet-version: |
+          10.0.x
+          11.0.x
     - name: Restore dependencies
-      run: dotnet restore $PROJECT_PATH
+      run: dotnet restore Tests/IL.VirtualViews.Tests.csproj
     - name: Build
-      run: dotnet build --no-restore --configuration Release /p:Version=$VERSION $PROJECT_PATH
+      run: dotnet build --no-restore --configuration Release Tests/IL.VirtualViews.Tests.csproj
+    - name: Test both target frameworks
+      run: dotnet test --no-build --no-restore --configuration Release Tests/IL.VirtualViews.Tests.csproj
     - name: Pack NuGet package
-      run: dotnet pack --configuration Release --output ./nupkg /p:PackageVersion=$VERSION $PROJECT_PATH
+      run: dotnet pack --no-build --no-restore --configuration Release --output ./nupkg $PROJECT_PATH
       if: success() && github.ref_type == 'tag'
+    - name: NuGet login
+      id: login
+      uses: NuGet/login@v1.2.0
+      with:
+        user: ihorleleka
     - name: Publish NuGet package
-      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --skip-duplicate
       if: success() && github.ref_type == 'tag'
